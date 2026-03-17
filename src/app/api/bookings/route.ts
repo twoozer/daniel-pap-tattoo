@@ -152,7 +152,9 @@ export async function POST(request: NextRequest) {
             .update({ google_calendar_event_id: eventId })
             .eq('id', booking.id);
         }
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('[BOOKING] Failed to create calendar event:', err);
+      });
     }
 
     // If standard booking with deposit, create Stripe Checkout session

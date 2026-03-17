@@ -34,17 +34,26 @@ function isConfigured(): boolean {
 
 function getCalendarClient(): calendar_v3.Calendar | null {
   if (!isConfigured()) {
-    console.log('[GCAL] Google Calendar not configured. Skipping.');
+    console.log('[GCAL] Google Calendar not configured. Skipping.', {
+      hasCalendarId: !!CALENDAR_ID,
+      hasEmail: !!SERVICE_ACCOUNT_EMAIL,
+      hasKey: !!PRIVATE_KEY,
+    });
     return null;
   }
 
-  const auth = new google.auth.JWT({
-    email: SERVICE_ACCOUNT_EMAIL,
-    key: PRIVATE_KEY,
-    scopes: ['https://www.googleapis.com/auth/calendar'],
-  });
+  try {
+    const auth = new google.auth.JWT({
+      email: SERVICE_ACCOUNT_EMAIL,
+      key: PRIVATE_KEY,
+      scopes: ['https://www.googleapis.com/auth/calendar'],
+    });
 
-  return google.calendar({ version: 'v3', auth });
+    return google.calendar({ version: 'v3', auth });
+  } catch (err) {
+    console.error('[GCAL] Failed to create auth client:', err);
+    return null;
+  }
 }
 
 /**

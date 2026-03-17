@@ -132,54 +132,61 @@ export async function POST(request: NextRequest) {
       endTime: booking.appointment_end_time,
     });
 
-    // Send email notifications (non-blocking)
-    sendAdminNewBookingNotification(booking).catch((err) => {
-      console.error('[BOOKING] Failed to send admin notification:', err);
-    });
-    if (status !== 'pending_deposit') {
-      // For consultations and custom quotes, send confirmation immediately
-      // For standard bookings, we send after Stripe payment confirmation
-      sendBookingConfirmation(booking).then((sent) => {
-        console.log('[BOOKING] Confirmation email sent:', sent);
+    // Send email notifications — must await on Vercel (serverless functions terminate after response)
+    const emailPromises: Promise<unknown>[] = [];
+
+    emailPromises.push(
+      sendAdminNewBookingNotification(booking).then((sent) => {
+        console.log('[BOOKING] Admin notification sent:', sent);
       }).catch((err) => {
-        console.error('[BOOKING] Failed to send confirmation:', err);
-      });
+        console.error('[BOOKING] Failed to send admin notification:', err);
+      })
+    );
+
+    if (status !== 'pending_deposit') {
+      emailPromises.push(
+        sendBookingConfirmation(booking).then((sent) => {
+          console.log('[BOOKING] Confirmation email sent:', sent);
+        }).catch((err) => {
+          console.error('[BOOKING] Failed to send confirmation:', err);
+        })
+      );
     } else {
       console.log('[BOOKING] Skipping confirmation email — pending_deposit, will send after Stripe payment');
     }
 
-    // Create Google Calendar event for non-deposit bookings with an appointment (non-blocking)
-    // For standard bookings (pending_deposit), the calendar event is created after payment via Stripe webhook
-    console.log('[BOOKING] Calendar check:', {
-      statusCheck: status !== 'pending_deposit',
-      hasDate: !!booking.appointment_date,
-      hasStart: !!booking.appointment_start_time,
-      hasEnd: !!booking.appointment_end_time,
-    });
+    // Create Google Calendar event for non-deposit bookings with an appointment
     if (status !== 'pending_deposit' && booking.appointment_date && booking.appointment_start_time && booking.appointment_end_time) {
       const isConsultation = data.booking_type === 'consultation';
-      createCalendarEvent({
-        summary: isConsultation
-          ? `Consultation: ${data.customer_name}`
-          : `Tattoo: ${data.customer_name}${data.size_category ? ` (${data.size_category})` : ''}`,
-        description: data.description || undefined,
-        date: booking.appointment_date,
-        startTime: booking.appointment_start_time,
-        endTime: booking.appointment_end_time,
-        customerName: data.customer_name,
-        customerEmail: data.customer_email,
-        customerPhone: data.customer_phone,
-      }).then(async (eventId) => {
-        if (eventId) {
-          await supabase
-            .from('bookings')
-            .update({ google_calendar_event_id: eventId })
-            .eq('id', booking.id);
-        }
-      }).catch((err) => {
-        console.error('[BOOKING] Failed to create calendar event:', err);
-      });
+      emailPromises.push(
+        createCalendarEvent({
+          summary: isConsultation
+            ? `Consultation: ${data.customer_name}`
+            : `Tattoo: ${data.customer_name}${data.size_category ? ` (${data.size_category})` : ''}`,
+          description: data.description || undefined,
+          date: booking.appointment_date,
+          startTime: booking.appointment_start_time,
+          endTime: booking.appointment_end_time,
+          customerName: data.customer_name,
+          customerEmail: data.customer_email,
+          customerPhone: data.customer_phone,
+        }).then(async (eventId) => {
+          console.log('[BOOKING] Calendar event created:', eventId);
+          if (eventId) {
+            await supabase
+              .from('bookings')
+              .update({ google_calendar_event_id: eventId })
+              .eq('id', booking.id);
+          }
+        }).catch((err) => {
+          console.error('[BOOKING] Failed to create calendar event:', err);
+        })
+      );
     }
+
+    // Wait for all emails and calendar to complete before returning
+    await Promise.all(emailPromises);
+    console.log('[BOOKING] All async tasks completed');
 
     // If standard booking with deposit, create Stripe Checkout session
     if (status === 'pending_deposit' && depositAmount) {

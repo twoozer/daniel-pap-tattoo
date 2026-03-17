@@ -11,7 +11,8 @@
 import { generateICalString } from './ical';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.FROM_EMAIL || 'Daniel Pap Tattoo <info@danielpaptattoo.com>';
+const FROM_EMAIL_RAW = process.env.FROM_EMAIL || 'info@danielpaptattoo.com';
+const FROM_EMAIL = FROM_EMAIL_RAW.includes('<') ? FROM_EMAIL_RAW : `Daniel Pap Tattoo <${FROM_EMAIL_RAW}>`;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'info@danielpaptattoo.com';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 

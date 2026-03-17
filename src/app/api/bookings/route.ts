@@ -122,16 +122,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
+    // Log booking data for debugging
+    console.log('[BOOKING] Created booking:', {
+      id: booking.id,
+      status,
+      type: booking.booking_type,
+      date: booking.appointment_date,
+      startTime: booking.appointment_start_time,
+      endTime: booking.appointment_end_time,
+    });
+
     // Send email notifications (non-blocking)
-    sendAdminNewBookingNotification(booking).catch(() => {});
+    sendAdminNewBookingNotification(booking).catch((err) => {
+      console.error('[BOOKING] Failed to send admin notification:', err);
+    });
     if (status !== 'pending_deposit') {
       // For consultations and custom quotes, send confirmation immediately
       // For standard bookings, we send after Stripe payment confirmation
-      sendBookingConfirmation(booking).catch(() => {});
+      sendBookingConfirmation(booking).then((sent) => {
+        console.log('[BOOKING] Confirmation email sent:', sent);
+      }).catch((err) => {
+        console.error('[BOOKING] Failed to send confirmation:', err);
+      });
+    } else {
+      console.log('[BOOKING] Skipping confirmation email — pending_deposit, will send after Stripe payment');
     }
 
     // Create Google Calendar event for non-deposit bookings with an appointment (non-blocking)
     // For standard bookings (pending_deposit), the calendar event is created after payment via Stripe webhook
+    console.log('[BOOKING] Calendar check:', {
+      statusCheck: status !== 'pending_deposit',
+      hasDate: !!booking.appointment_date,
+      hasStart: !!booking.appointment_start_time,
+      hasEnd: !!booking.appointment_end_time,
+    });
     if (status !== 'pending_deposit' && booking.appointment_date && booking.appointment_start_time && booking.appointment_end_time) {
       const isConsultation = data.booking_type === 'consultation';
       createCalendarEvent({

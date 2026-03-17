@@ -76,9 +76,11 @@ export async function createCalendarEvent(params: {
   const { summary, description, date, startTime, endTime, customerName, customerEmail, customerPhone } = params;
 
   // Build timezone-aware datetime strings (Gold Coast = Australia/Brisbane, AEST UTC+10)
+  // startTime may be HH:MM or HH:MM:SS — normalize to HH:MM:SS
   const timeZone = 'Australia/Brisbane';
-  const startDateTime = `${date}T${startTime}:00`;
-  const endDateTime = `${date}T${endTime}:00`;
+  const normalizeTime = (t: string) => t.length === 5 ? `${t}:00` : t;
+  const startDateTime = `${date}T${normalizeTime(startTime)}`;
+  const endDateTime = `${date}T${normalizeTime(endTime)}`;
 
   const eventDescription = [
     `Customer: ${customerName}`,

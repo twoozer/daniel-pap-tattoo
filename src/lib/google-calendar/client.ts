@@ -113,8 +113,13 @@ export async function createCalendarEvent(params: {
 
     console.log(`[GCAL] Created event: ${res.data.id}`);
     return res.data.id || null;
-  } catch (err) {
-    console.error('[GCAL] Failed to create event:', err);
+  } catch (err: unknown) {
+    const gErr = err as { response?: { data?: unknown }; message?: string };
+    console.error('[GCAL] Failed to create event:', {
+      message: gErr.message,
+      responseData: gErr.response?.data,
+      params: { date, startTime, endTime, summary },
+    });
     return null;
   }
 }

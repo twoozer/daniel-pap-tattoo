@@ -6,11 +6,20 @@ import { FlashDesign } from '@/types/booking';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TATTOO_STYLES } from '@/lib/utils/constants';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, X } from 'lucide-react';
+
+function getFlashImageUrl(design: FlashDesign): string | null {
+  if (design.image_url) return design.image_url;
+  if (!design.image_path) return null;
+  const supabase = createClient();
+  const { data } = supabase.storage.from('flash-designs').getPublicUrl(design.image_path);
+  return data.publicUrl;
+}
 
 export function AdminFlashGalleryContent() {
   const [designs, setDesigns] = useState<FlashDesign[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingDesign, setEditingDesign] = useState<FlashDesign | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Form state
@@ -36,47 +45,96 @@ export function AdminFlashGalleryContent() {
     loadDesigns();
   }, []);
 
-  const handleUpload = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setStyle('');
+    setSuggestedSize('');
+    setImageFile(null);
+    setShowForm(false);
+    setEditingDesign(null);
+  };
+
+  const startEdit = (design: FlashDesign) => {
+    setEditingDesign(design);
+    setTitle(design.title);
+    setDescription(design.description || '');
+    setStyle(design.style || '');
+    setSuggestedSize(design.suggested_size || '');
+    setImageFile(null);
+    setShowForm(true);
+  };
+
+  const startNew = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !imageFile) return;
+    if (!title || (!imageFile && !editingDesign)) return;
     setSubmitting(true);
 
-    // Upload image to Supabase Storage
-    const fileExt = imageFile.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const { error: uploadError } = await supabase.storage
-      .from('flash-designs')
-      .upload(fileName, imageFile);
+    let imagePath = editingDesign?.image_path || '';
 
-    if (uploadError) {
-      alert('Image upload failed: ' + uploadError.message);
-      setSubmitting(false);
-      return;
+    // Upload new image if provided
+    if (imageFile) {
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('flash-designs')
+        .upload(fileName, imageFile);
+
+      if (uploadError) {
+        alert('Image upload failed: ' + uploadError.message);
+        setSubmitting(false);
+        return;
+      }
+
+      // Delete old image if replacing
+      if (editingDesign?.image_path) {
+        await supabase.storage.from('flash-designs').remove([editingDesign.image_path]);
+      }
+
+      imagePath = fileName;
     }
 
-    // Create flash design record
-    const res = await fetch('/api/flash', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title,
-        description: description || null,
-        style: style || null,
-        image_path: fileName,
-        suggested_size: suggestedSize || null,
-        sort_order: designs.length,
-      }),
-    });
+    if (editingDesign) {
+      // Update existing design
+      await supabase
+        .from('flash_designs')
+        .update({
+          title,
+          description: description || null,
+          style: style || null,
+          suggested_size: suggestedSize || null,
+          image_path: imagePath,
+        })
+        .eq('id', editingDesign.id);
+    } else {
+      // Create new design
+      const res = await fetch('/api/flash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          description: description || null,
+          style: style || null,
+          image_path: imagePath,
+          suggested_size: suggestedSize || null,
+          sort_order: designs.length,
+        }),
+      });
 
-    if (res.ok) {
-      setTitle('');
-      setDescription('');
-      setStyle('');
-      setSuggestedSize('');
-      setImageFile(null);
-      setShowForm(false);
-      loadDesigns();
+      if (!res.ok) {
+        alert('Failed to create design');
+        setSubmitting(false);
+        return;
+      }
     }
+
+    resetForm();
+    loadDesigns();
     setSubmitting(false);
   };
 
@@ -105,20 +163,25 @@ export function AdminFlashGalleryContent() {
           <h1 className="text-2xl font-bold">Flash Gallery</h1>
           <p className="mt-1 text-sm text-zinc-500">Manage your flash designs</p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={startNew}>
           <Plus size={16} />
           Add Design
         </Button>
       </div>
 
-      {/* Upload form */}
+      {/* Upload / Edit form */}
       {showForm && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Upload New Flash Design</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>{editingDesign ? 'Edit Flash Design' : 'Upload New Flash Design'}</CardTitle>
+              <button onClick={resetForm} className="rounded-full p-1 hover:bg-zinc-100">
+                <X size={18} />
+              </button>
+            </div>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleUpload} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700">Title *</label>
                 <input
@@ -168,18 +231,32 @@ export function AdminFlashGalleryContent() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700">Image *</label>
+                <label className="block text-sm font-medium text-zinc-700">
+                  {editingDesign ? 'Replace Image (optional)' : 'Image *'}
+                </label>
+                {editingDesign && (
+                  <div className="mt-1 mb-2">
+                    <img
+                      src={getFlashImageUrl(editingDesign) || ''}
+                      alt="Current"
+                      className="h-24 w-24 rounded-md object-cover border border-zinc-200"
+                    />
+                    <p className="mt-1 text-xs text-zinc-400">Current image — upload a new one to replace it</p>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                  required
+                  required={!editingDesign}
                   className="mt-1 w-full text-sm"
                 />
               </div>
               <div className="flex gap-3">
-                <Button type="submit" loading={submitting}>Upload Design</Button>
-                <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
+                <Button type="submit" loading={submitting}>
+                  {editingDesign ? 'Save Changes' : 'Upload Design'}
+                </Button>
+                <Button type="button" variant="ghost" onClick={resetForm}>Cancel</Button>
               </div>
             </form>
           </CardContent>
@@ -199,31 +276,49 @@ export function AdminFlashGalleryContent() {
         </Card>
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {designs.map((design) => (
-            <Card key={design.id} className={!design.is_available ? 'opacity-50' : ''}>
-              <div className="aspect-square bg-zinc-100">
-                <div className="flex h-full items-center justify-center text-zinc-300">
-                  <span className="text-4xl">&#x1F3A8;</span>
+          {designs.map((design) => {
+            const imageUrl = getFlashImageUrl(design);
+            return (
+              <Card key={design.id} className={!design.is_available ? 'opacity-50' : ''}>
+                <div className="aspect-square bg-zinc-100 overflow-hidden">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={design.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-zinc-300">
+                      <span className="text-sm">No image</span>
+                    </div>
+                  )}
                 </div>
-              </div>
-              <CardContent className="py-3">
-                <p className="font-medium">{design.title}</p>
-                {design.style && <p className="text-xs capitalize text-zinc-400">{design.style.replace('-', ' ')}</p>}
-                <div className="mt-3 flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant={design.is_available ? 'outline' : 'secondary'}
-                    onClick={() => handleToggleAvailability(design)}
-                  >
-                    {design.is_available ? 'Hide' : 'Show'}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => handleDelete(design)}>
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                <CardContent className="py-3">
+                  <p className="font-medium">{design.title}</p>
+                  {design.style && <p className="text-xs capitalize text-zinc-400">{design.style.replace('-', ' ')}</p>}
+                  <div className="mt-3 flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => startEdit(design)}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={design.is_available ? 'outline' : 'secondary'}
+                      onClick={() => handleToggleAvailability(design)}
+                    >
+                      {design.is_available ? 'Hide' : 'Show'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDelete(design)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

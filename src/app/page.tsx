@@ -13,7 +13,7 @@ export default function HomePage() {
         <section className="bg-black px-4 py-24 text-white md:py-32">
           <div className="mx-auto max-w-4xl text-center">
             <h1 className="text-4xl font-bold tracking-tight md:text-6xl">
-              Daniel Pap Tattoo: Book your next Tattoo
+              Book Your Next Tattoo
             </h1>
             <p className="mt-6 text-lg text-zinc-400 md:text-xl">
               Browse the flash gallery, select your own design, or book a consultation.

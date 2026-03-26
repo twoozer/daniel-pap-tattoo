@@ -8,6 +8,26 @@ import { Button } from '@/components/ui/button';
 import { DAY_NAMES } from '@/lib/utils/constants';
 import { Plus, Trash2 } from 'lucide-react';
 
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+function getDatesInRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(start + 'T00:00:00');
+  const last = new Date(end + 'T00:00:00');
+  while (current <= last) {
+    dates.push(current.toISOString().split('T')[0]);
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+}
+
 export function AdminAvailabilityContent() {
   const [availability, setAvailability] = useState<Availability[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
@@ -15,7 +35,8 @@ export function AdminAvailabilityContent() {
   const [saving, setSaving] = useState(false);
 
   // Block date form
-  const [blockDate, setBlockDate] = useState('');
+  const [blockStartDate, setBlockStartDate] = useState('');
+  const [blockEndDate, setBlockEndDate] = useState('');
   const [blockReason, setBlockReason] = useState('');
 
   const supabase = createClient();
@@ -49,19 +70,48 @@ export function AdminAvailabilityContent() {
     loadData();
   };
 
-  const addBlockedDate = async () => {
-    if (!blockDate) return;
-    await supabase.from('blocked_dates').insert({
-      date: blockDate,
-      reason: blockReason || null,
-    });
-    setBlockDate('');
+  const addBlockedDates = async () => {
+    if (!blockStartDate) return;
+    const endDate = blockEndDate || blockStartDate;
+    const dates = getDatesInRange(blockStartDate, endDate);
+    const reason = blockReason || null;
+
+    // Insert all dates in the range
+    const rows = dates.map((date) => ({ date, reason }));
+    await supabase.from('blocked_dates').insert(rows);
+
+    setBlockStartDate('');
+    setBlockEndDate('');
     setBlockReason('');
     loadData();
   };
 
   const removeBlockedDate = async (id: string) => {
     await supabase.from('blocked_dates').delete().eq('id', id);
+    loadData();
+  };
+
+  // Group consecutive blocked dates with same reason for display
+  const groupedBlocks = blockedDates.reduce<Array<{ ids: string[]; startDate: string; endDate: string; reason: string | null }>>((groups, bd) => {
+    const last = groups[groups.length - 1];
+    if (last && last.reason === bd.reason) {
+      const lastEnd = new Date(last.endDate + 'T00:00:00');
+      const current = new Date(bd.date + 'T00:00:00');
+      const diffDays = (current.getTime() - lastEnd.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays === 1) {
+        last.endDate = bd.date;
+        last.ids.push(bd.id);
+        return groups;
+      }
+    }
+    groups.push({ ids: [bd.id], startDate: bd.date, endDate: bd.date, reason: bd.reason });
+    return groups;
+  }, []);
+
+  const removeBlockedGroup = async (ids: string[]) => {
+    for (const id of ids) {
+      await supabase.from('blocked_dates').delete().eq('id', id);
+    }
     loadData();
   };
 
@@ -128,11 +178,26 @@ export function AdminAvailabilityContent() {
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-500">Date</label>
+              <label className="block text-xs font-medium text-zinc-500">From</label>
               <input
                 type="date"
-                value={blockDate}
-                onChange={(e) => setBlockDate(e.target.value)}
+                value={blockStartDate}
+                onChange={(e) => {
+                  setBlockStartDate(e.target.value);
+                  if (!blockEndDate || e.target.value > blockEndDate) {
+                    setBlockEndDate(e.target.value);
+                  }
+                }}
+                className="mt-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500">To</label>
+              <input
+                type="date"
+                value={blockEndDate}
+                min={blockStartDate}
+                onChange={(e) => setBlockEndDate(e.target.value)}
                 className="mt-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm"
               />
             </div>
@@ -142,24 +207,34 @@ export function AdminAvailabilityContent() {
                 type="text"
                 value={blockReason}
                 onChange={(e) => setBlockReason(e.target.value)}
-                placeholder="E.g. Holiday"
+                placeholder="E.g. Holiday, Convention"
                 className="mt-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm"
               />
             </div>
-            <Button size="sm" onClick={addBlockedDate}>
-              <Plus size={14} /> Block Date
+            <Button size="sm" onClick={addBlockedDates}>
+              <Plus size={14} /> Block Dates
             </Button>
           </div>
 
-          {blockedDates.length > 0 && (
+          {groupedBlocks.length > 0 && (
             <div className="mt-4 space-y-2">
-              {blockedDates.map((bd) => (
-                <div key={bd.id} className="flex items-center justify-between rounded-md bg-red-50 px-3 py-2">
+              {groupedBlocks.map((group, i) => (
+                <div key={i} className="flex items-center justify-between rounded-md bg-red-50 px-3 py-2">
                   <div>
-                    <span className="text-sm font-medium">{bd.date}</span>
-                    {bd.reason && <span className="ml-2 text-sm text-zinc-500">{bd.reason}</span>}
+                    <span className="text-sm font-medium">
+                      {formatDate(group.startDate)}
+                      {group.startDate !== group.endDate && (
+                        <> — {formatDate(group.endDate)}</>
+                      )}
+                    </span>
+                    {group.startDate !== group.endDate && (
+                      <span className="ml-2 text-xs text-zinc-400">
+                        ({group.ids.length} days)
+                      </span>
+                    )}
+                    {group.reason && <span className="ml-2 text-sm text-zinc-500">{group.reason}</span>}
                   </div>
-                  <button onClick={() => removeBlockedDate(bd.id)} className="text-red-500 hover:text-red-700">
+                  <button onClick={() => removeBlockedGroup(group.ids)} className="text-red-500 hover:text-red-700">
                     <Trash2 size={14} />
                   </button>
                 </div>

@@ -6,6 +6,7 @@ import { PriceTier } from '@/types/booking';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatPriceShort } from '@/lib/utils/pricing';
+import { Plus, Trash2 } from 'lucide-react';
 
 export function AdminPricingContent() {
   const [tiers, setTiers] = useState<PriceTier[]>([]);
@@ -30,14 +31,42 @@ export function AdminPricingContent() {
     loadTiers();
   };
 
+  const addTier = async () => {
+    const sizeCategory = `custom_${Date.now()}`;
+    await supabase.from('price_tiers').insert({
+      size_category: sizeCategory,
+      display_name: 'New Tier',
+      description: null,
+      price_pence: null,
+      estimated_hours: 1,
+      deposit_percent: 20,
+      sort_order: tiers.length,
+    });
+    loadTiers();
+  };
+
+  const deleteTier = async (tier: PriceTier) => {
+    if (!confirm(`Delete "${tier.display_name}"?`)) return;
+    await supabase.from('price_tiers').delete().eq('id', tier.id);
+    loadTiers();
+  };
+
   if (loading) {
     return <p className="text-sm text-zinc-400">Loading...</p>;
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Pricing</h1>
-      <p className="mt-1 text-sm text-zinc-500">Manage your price tiers and deposit settings</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Pricing</h1>
+          <p className="mt-1 text-sm text-zinc-500">Manage your price tiers and deposit settings</p>
+        </div>
+        <Button onClick={addTier}>
+          <Plus size={16} />
+          Add Tier
+        </Button>
+      </div>
 
       <div className="mt-6 space-y-4">
         {tiers.map((tier) => (
@@ -62,9 +91,14 @@ export function AdminPricingContent() {
                       <span>Deposit: {tier.deposit_percent}%</span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setEditing(tier.id)}>
-                    Edit
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditing(tier.id)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => deleteTier(tier)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

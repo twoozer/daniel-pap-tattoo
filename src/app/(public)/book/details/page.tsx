@@ -135,15 +135,12 @@ export default function DetailsStepPage() {
           />
         </div>
 
-        {/* Reference image upload — only show for non-flash bookings */}
-        {!isFlashBooking && (
-          <div className="rounded-md border-2 border-dashed border-zinc-300 p-6 text-center">
-            <p className="text-sm text-zinc-400">
-              Reference image upload coming soon. For now, you can share images via
-              the messaging feature after booking.
-            </p>
-          </div>
-        )}
+        {/* Reference image note */}
+        <div className="rounded-md bg-zinc-50 border border-zinc-200 p-4">
+          <p className="text-sm text-zinc-500">
+            Want to share reference images? You can send images via the messaging feature after booking.
+          </p>
+        </div>
       </div>
 
       <div className="mt-8 flex items-center justify-between">

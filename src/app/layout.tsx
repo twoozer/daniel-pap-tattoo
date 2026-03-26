@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Daniel Pap Tattoo | Book Your Next Tattoo",
   description: "Clean, Classic, Fast Tattooing on the Gold Coast. Browse the flash gallery, select your own design, or book a consultation with Daniel Pap.",
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    interactiveWidget: 'resizes-content',
+  },
 };
 
 export default function RootLayout({

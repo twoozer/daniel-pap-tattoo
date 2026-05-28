@@ -65,4 +65,18 @@ export const DAY_NAMES = [
 
 export const CONSULTATION_DURATION_MINUTES = 30;
 export const DEPOSIT_PERCENT = 20;
-export const TIME_ZONE = 'Europe/London';
+export const TIME_ZONE = 'Australia/Brisbane';
+export const MAX_ADVANCE_BOOKING_MONTHS = 6;
+
+export const VALID_BOOKING_STATUSES = [
+  'pending_deposit',
+  'deposit_paid',
+  'custom_quote_pending',
+  'consultation_booked',
+  'confirmed',
+  'completed',
+  'cancelled',
+  'no_show',
+] as const;
+
+export type BookingStatus = typeof VALID_BOOKING_STATUSES[number];

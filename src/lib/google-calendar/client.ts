@@ -147,8 +147,22 @@ export async function deleteCalendarEvent(eventId: string): Promise<boolean> {
 }
 
 /**
- * Get busy times from Google Calendar for a given date range.
- * Used to compute available slots.
+ * Convert a UTC ISO timestamp to HH:MM in Australia/Brisbane (AEST, UTC+10).
+ * Uses manual offset to avoid toLocaleTimeString inconsistencies across server runtimes.
+ */
+function toAEST_HHmm(isoString: string): string {
+  const d = new Date(isoString);
+  // Australia/Brisbane is always UTC+10 (no daylight saving)
+  const aestMs = d.getTime() + 10 * 60 * 60 * 1000;
+  const aest = new Date(aestMs);
+  const hh = aest.getUTCHours().toString().padStart(2, '0');
+  const mm = aest.getUTCMinutes().toString().padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+/**
+ * Get busy times from Google Calendar for a given date.
+ * Blocks slots where the artist has manually added events or personal appointments.
  */
 export async function getCalendarBusyTimes(date: string): Promise<Array<{ start: string; end: string }>> {
   const calendar = getCalendarClient();
@@ -166,11 +180,20 @@ export async function getCalendarBusyTimes(date: string): Promise<Array<{ start:
       },
     });
 
-    const busySlots = res.data.calendars?.[CALENDAR_ID!]?.busy || [];
-    return busySlots.map((slot) => ({
-      start: new Date(slot.start!).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone }),
-      end: new Date(slot.end!).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone }),
+    const calendarData = res.data.calendars?.[CALENDAR_ID!];
+    const errors = calendarData?.errors;
+    if (errors && errors.length > 0) {
+      console.error('[GCAL] Freebusy query returned errors:', errors);
+    }
+
+    const busySlots = calendarData?.busy || [];
+    const mapped = busySlots.map((slot) => ({
+      start: toAEST_HHmm(slot.start!),
+      end: toAEST_HHmm(slot.end!),
     }));
+
+    console.log(`[GCAL] Busy times for ${date}:`, mapped.length > 0 ? mapped : 'none');
+    return mapped;
   } catch (err) {
     console.error('[GCAL] Failed to get busy times:', err);
     return [];

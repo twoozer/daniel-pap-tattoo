@@ -6,7 +6,8 @@ import { useBookingStore } from '@/hooks/use-booking-store';
 import { BookingStepper } from '@/components/booking/booking-stepper';
 import { Button } from '@/components/ui/button';
 import { TimeSlot } from '@/types/booking';
-import { formatDate, formatTime, addDays, toDateString } from '@/lib/utils/date-helpers';
+import { formatDate, formatTime, addDays, addMonths, toDateString } from '@/lib/utils/date-helpers';
+import { MAX_ADVANCE_BOOKING_MONTHS } from '@/lib/utils/constants';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export function ScheduleContent() {
@@ -29,6 +30,8 @@ export function ScheduleContent() {
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const maxBookingDate = addMonths(new Date(), MAX_ADVANCE_BOOKING_MONTHS);
+  const maxDateStr = toDateString(maxBookingDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   useEffect(() => {
@@ -71,7 +74,7 @@ export function ScheduleContent() {
             <ChevronLeft size={20} />
           </button>
           <span className="text-sm font-medium">{formatDate(toDateString(weekStart))} &mdash; {formatDate(toDateString(addDays(weekStart, 6)))}</span>
-          <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="rounded-md p-2 hover:bg-zinc-100">
+          <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="rounded-md p-2 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed" disabled={addDays(weekStart, 7) > maxBookingDate}>
             <ChevronRight size={20} />
           </button>
         </div>
@@ -81,10 +84,12 @@ export function ScheduleContent() {
             const dateStr = toDateString(day);
             const isToday = toDateString(new Date()) === dateStr;
             const isPast = day < new Date() && !isToday;
+            const isBeyondMax = dateStr > maxDateStr;
+            const isDisabled = isPast || isBeyondMax;
             const isSelected = selectedDate === dateStr;
             return (
-              <button key={dateStr} onClick={() => { setSelectedDate(dateStr); setSelectedSlot(null); }} disabled={isPast}
-                className={`rounded-md p-2 text-center text-sm transition-colors ${isSelected ? 'bg-black text-white' : isPast ? 'text-zinc-300' : 'hover:bg-zinc-100'}`}>
+              <button key={dateStr} onClick={() => { setSelectedDate(dateStr); setSelectedSlot(null); }} disabled={isDisabled}
+                className={`rounded-md p-2 text-center text-sm transition-colors ${isSelected ? 'bg-black text-white' : isDisabled ? 'text-zinc-300 cursor-not-allowed' : 'hover:bg-zinc-100'}`}>
                 <div className="text-xs font-medium">{day.toLocaleDateString('en-GB', { weekday: 'short' })}</div>
                 <div className="mt-1 text-lg font-semibold">{day.getDate()}</div>
               </button>

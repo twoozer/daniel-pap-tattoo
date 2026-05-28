@@ -3,10 +3,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createBookingSchema } from '@/lib/validators/booking';
 import { getStripe } from '@/lib/stripe/client';
 import { calculateDeposit, formatPrice } from '@/lib/utils/pricing';
-import { DEPOSIT_PERCENT, CONSULTATION_DURATION_MINUTES } from '@/lib/utils/constants';
+import { DEPOSIT_PERCENT, CONSULTATION_DURATION_MINUTES, MAX_ADVANCE_BOOKING_MONTHS } from '@/lib/utils/constants';
 import { IS_PROTOTYPE, MOCK_PRICE_TIERS } from '@/lib/mock-data';
 import { sendBookingConfirmation, sendAdminNewBookingNotification } from '@/lib/email/send';
 import { createCalendarEvent } from '@/lib/google-calendar/client';
+import { getMaxBookingDate, toDateString } from '@/lib/utils/date-helpers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +19,17 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+
+    // Enforce max advance booking window
+    if (data.appointment_date) {
+      const maxDate = toDateString(getMaxBookingDate(MAX_ADVANCE_BOOKING_MONTHS));
+      if (data.appointment_date > maxDate) {
+        return NextResponse.json(
+          { error: `Bookings cannot be made more than ${MAX_ADVANCE_BOOKING_MONTHS} months in advance` },
+          { status: 400 }
+        );
+      }
+    }
 
     // Look up price tier if size_category provided
     let totalPrice: number | null = null;

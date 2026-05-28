@@ -37,10 +37,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     0
   );
 
-  // Extract customer notes from the latest booking's artist_notes (if prefixed)
-  const customerNotes = customer.artist_notes?.startsWith('[Customer Note] ')
-    ? customer.artist_notes.replace('[Customer Note] ', '')
-    : null;
+  const customerNotes = customer.customer_notes || null;
 
   return (
     <div>

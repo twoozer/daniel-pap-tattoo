@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateTimeSlots } from '@/lib/utils/date-helpers';
+import { generateTimeSlots, getMaxBookingDate, toDateString } from '@/lib/utils/date-helpers';
 import { IS_PROTOTYPE, getMockAvailabilityForDay } from '@/lib/mock-data';
 import { getCalendarBusyTimes } from '@/lib/google-calendar/client';
+import { MAX_ADVANCE_BOOKING_MONTHS } from '@/lib/utils/constants';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -11,6 +12,12 @@ export async function GET(request: NextRequest) {
 
   if (!date) {
     return NextResponse.json({ error: 'date is required' }, { status: 400 });
+  }
+
+  // Enforce max advance booking window
+  const maxDate = toDateString(getMaxBookingDate(MAX_ADVANCE_BOOKING_MONTHS));
+  if (date > maxDate) {
+    return NextResponse.json({ slots: [], maxDate });
   }
 
   const dayOfWeek = new Date(date + 'T00:00:00').getDay();

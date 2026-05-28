@@ -56,8 +56,12 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // Verify customer access if token is provided
-    if (sender_type === 'customer' && token) {
+    // Verify customer access — token is required for customer messages
+    if (sender_type === 'customer') {
+      if (!token) {
+        return NextResponse.json({ error: 'Token required' }, { status: 403 });
+      }
+
       const { data: booking } = await supabase
         .from('bookings')
         .select('id')

@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { deleteCalendarEvent } from '@/lib/google-calendar/client';
+import { VALID_BOOKING_STATUSES } from '@/lib/utils/constants';
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Verify admin authentication
+    const authClient = await createClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
     const { status } = await request.json();
 
     if (!status) {
       return NextResponse.json({ error: 'status is required' }, { status: 400 });
+    }
+
+    // Validate status is a known value
+    if (!VALID_BOOKING_STATUSES.includes(status)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
     const supabase = createAdminClient();

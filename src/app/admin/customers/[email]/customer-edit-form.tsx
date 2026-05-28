@@ -102,7 +102,7 @@ export function CustomerEditForm({ email, currentName, currentPhone, currentNote
             className="text-red-600 border-red-200 hover:bg-red-50"
             onClick={() => { setDeleting(true); setSuccess(''); }}
           >
-            <Trash2 size={14} className="mr-1" /> Delete Customer
+            <Trash2 size={14} className="mr-1" /> Cancel All Bookings
           </Button>
         </div>
       )}
@@ -172,9 +172,9 @@ export function CustomerEditForm({ email, currentName, currentPhone, currentNote
       {deleting && (
         <Card className="border-red-200">
           <CardContent className="py-4">
-            <h3 className="font-semibold text-red-600">Delete Customer</h3>
+            <h3 className="font-semibold text-red-600">Cancel All Bookings</h3>
             <p className="mt-2 text-sm text-zinc-600">
-              This will permanently delete <strong>{currentName}</strong> and all {bookingCount} associated booking{bookingCount !== 1 ? 's' : ''}, messages, and data. This action cannot be undone.
+              This will cancel all active bookings for <strong>{currentName}</strong>. Booking history and messages will be preserved for your records.
             </p>
             {error && <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
             <div className="mt-4 flex gap-2">
@@ -183,9 +183,9 @@ export function CustomerEditForm({ email, currentName, currentPhone, currentNote
                 onClick={handleDelete}
                 loading={saving}
               >
-                Yes, Delete Everything
+                Yes, Cancel All Bookings
               </Button>
-              <Button variant="ghost" onClick={() => { setDeleting(false); setError(''); }}>Cancel</Button>
+              <Button variant="ghost" onClick={() => { setDeleting(false); setError(''); }}>Back</Button>
             </div>
           </CardContent>
         </Card>

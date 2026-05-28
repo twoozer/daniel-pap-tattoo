@@ -84,15 +84,18 @@ export async function GET(request: NextRequest) {
 
   const blockedSet = new Set<string>();
   for (const row of blockedResult.data || []) {
-    blockedSet.add(row.date);
+    // Supabase date columns may return as 'YYYY-MM-DD' or with time info — normalize
+    const dateStr = typeof row.date === 'string' ? row.date.split('T')[0] : row.date;
+    blockedSet.add(dateStr);
   }
 
   const bookingsByDate = new Map<string, Array<{ start: string; end: string }>>();
   for (const row of bookingsResult.data || []) {
     if (!row.appointment_date || !row.appointment_start_time || !row.appointment_end_time) continue;
-    const list = bookingsByDate.get(row.appointment_date) || [];
+    const dateStr = typeof row.appointment_date === 'string' ? row.appointment_date.split('T')[0] : row.appointment_date;
+    const list = bookingsByDate.get(dateStr) || [];
     list.push({ start: row.appointment_start_time, end: row.appointment_end_time });
-    bookingsByDate.set(row.appointment_date, list);
+    bookingsByDate.set(dateStr, list);
   }
 
   // Compute per-day availability

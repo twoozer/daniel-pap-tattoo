@@ -22,7 +22,10 @@ function getDatesInRange(start: string, end: string): string[] {
   const current = new Date(start + 'T00:00:00');
   const last = new Date(end + 'T00:00:00');
   while (current <= last) {
-    dates.push(current.toISOString().split('T')[0]);
+    const y = current.getFullYear();
+    const m = (current.getMonth() + 1).toString().padStart(2, '0');
+    const d = current.getDate().toString().padStart(2, '0');
+    dates.push(`${y}-${m}-${d}`);
     current.setDate(current.getDate() + 1);
   }
   return dates;

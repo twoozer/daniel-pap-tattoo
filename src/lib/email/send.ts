@@ -9,12 +9,31 @@
  */
 
 import { generateICalString } from './ical';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_EMAIL_RAW = process.env.FROM_EMAIL || 'info@danielpaptattoo.com';
 const FROM_EMAIL = FROM_EMAIL_RAW.includes('<') ? FROM_EMAIL_RAW : `Daniel Pap Tattoo <${FROM_EMAIL_RAW}>`;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'info@danielpaptattoo.com';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+/**
+ * Log an email failure to the database (non-blocking).
+ * Never throws — wrapped in try/catch so it doesn't break the caller.
+ */
+function logEmailFailure(emailType: string, recipientEmail: string, errorMessage: string) {
+  try {
+    const supabase = createAdminClient();
+    supabase
+      .from('email_failures')
+      .insert({ email_type: emailType, recipient_email: recipientEmail, error_message: errorMessage })
+      .then(({ error }) => {
+        if (error) console.error('[EMAIL] Failed to log email failure:', error.message);
+      });
+  } catch (err) {
+    console.error('[EMAIL] logEmailFailure error:', err);
+  }
+}
 
 interface EmailAttachment {
   filename: string;
@@ -29,7 +48,7 @@ interface EmailPayload {
   attachments?: EmailAttachment[];
 }
 
-async function sendEmail({ to, subject, html, attachments }: EmailPayload): Promise<boolean> {
+async function sendEmail({ to, subject, html, attachments }: EmailPayload, emailType: string = 'unknown'): Promise<boolean> {
   if (!RESEND_API_KEY) {
     console.log('[EMAIL] No RESEND_API_KEY set. Would send:');
     console.log(`  To: ${to}`);
@@ -69,6 +88,7 @@ async function sendEmail({ to, subject, html, attachments }: EmailPayload): Prom
     if (!res.ok) {
       const error = await res.text();
       console.error('[EMAIL] Failed to send:', error);
+      logEmailFailure(emailType, to, error);
       return false;
     }
 
@@ -76,6 +96,7 @@ async function sendEmail({ to, subject, html, attachments }: EmailPayload): Prom
     return true;
   } catch (err) {
     console.error('[EMAIL] Error:', err);
+    logEmailFailure(emailType, to, err instanceof Error ? err.message : String(err));
     return false;
   }
 }
@@ -197,7 +218,7 @@ export async function sendBookingConfirmation(booking: {
     });
   }
 
-  return sendEmail({ to: booking.customer_email, subject, html, attachments });
+  return sendEmail({ to: booking.customer_email, subject, html, attachments }, 'booking_confirmation');
 }
 
 export async function sendAdminNewBookingNotification(booking: {
@@ -236,7 +257,7 @@ export async function sendAdminNewBookingNotification(booking: {
     </div>
   `;
 
-  return sendEmail({ to: ADMIN_EMAIL, subject, html });
+  return sendEmail({ to: ADMIN_EMAIL, subject, html }, 'admin_notification');
 }
 
 export async function sendNewMessageNotification(params: {
@@ -271,7 +292,7 @@ export async function sendNewMessageNotification(params: {
     </div>
   `;
 
-  return sendEmail({ to: recipientEmail, subject, html });
+  return sendEmail({ to: recipientEmail, subject, html }, 'message_notification');
 }
 
 /**
@@ -331,5 +352,5 @@ export async function sendAppointmentReminder(booking: {
     </div>
   `;
 
-  return sendEmail({ to: booking.customer_email, subject, html });
+  return sendEmail({ to: booking.customer_email, subject, html }, 'appointment_reminder');
 }

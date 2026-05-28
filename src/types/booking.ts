@@ -110,3 +110,10 @@ export interface TimeSlot {
   start: string;
   end: string;
 }
+
+export type DayAvailabilityStatus = 'available' | 'limited' | 'unavailable';
+
+export interface DayAvailabilitySummary {
+  slotCount: number;
+  status: DayAvailabilityStatus;
+}

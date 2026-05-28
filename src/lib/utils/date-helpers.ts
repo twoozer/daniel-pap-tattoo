@@ -78,3 +78,40 @@ export function addMonths(date: Date, months: number): Date {
 export function getMaxBookingDate(months: number): Date {
   return addMonths(new Date(), months);
 }
+
+export function toMonthString(date: Date): string {
+  const y = date.getFullYear();
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+/**
+ * Build the 6×7 calendar grid for a given month.
+ * Includes padding days from adjacent months. Week starts on Monday.
+ */
+export function getCalendarGridDates(year: number, month: number): Date[] {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  // Convert JS getDay() (Sun=0) to Monday-start (Mon=0, Sun=6)
+  const startOffset = (firstDay.getDay() + 6) % 7;
+
+  const dates: Date[] = [];
+
+  // Padding from previous month
+  for (let i = startOffset - 1; i >= 0; i--) {
+    dates.push(addDays(firstDay, -i - 1));
+  }
+
+  // Current month days
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    dates.push(new Date(year, month, d));
+  }
+
+  // Padding to fill 42 cells (6 rows × 7 cols)
+  while (dates.length < 42) {
+    dates.push(addDays(lastDay, dates.length - startOffset - lastDay.getDate() + 1));
+  }
+
+  return dates;
+}

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateTimeSlots, getMaxBookingDate, toDateString } from '@/lib/utils/date-helpers';
 import { IS_PROTOTYPE, MOCK_AVAILABILITY } from '@/lib/mock-data';
-import { MAX_ADVANCE_BOOKING_MONTHS, AVAILABILITY_LIMITED_THRESHOLD } from '@/lib/utils/constants';
+import { MAX_ADVANCE_BOOKING_MONTHS } from '@/lib/utils/constants';
+import { getCalendarBusyTimesRange } from '@/lib/google-calendar/client';
 import { DayAvailabilityStatus } from '@/types/booking';
 
 export async function GET(request: NextRequest) {
@@ -47,13 +48,13 @@ export async function GET(request: NextRequest) {
       const slots = generateTimeSlots(avail.start_time, avail.end_time, duration, 30);
       days[dateStr] = {
         slotCount: slots.length,
-        status: slots.length === 0 ? 'unavailable' : slots.length <= AVAILABILITY_LIMITED_THRESHOLD ? 'limited' : 'available',
+        status: slots.length > 0 ? 'available' : 'unavailable',
       };
     }
     return NextResponse.json({ days });
   }
 
-  // --- Production mode: 3 queries ---
+  // --- Production mode ---
   const supabase = createAdminClient();
 
   const [availResult, blockedResult, bookingsResult] = await Promise.all([
@@ -66,6 +67,14 @@ export async function GET(request: NextRequest) {
       .lte('appointment_date', monthEnd)
       .in('status', ['pending_deposit', 'deposit_paid', 'confirmed', 'consultation_booked']),
   ]);
+
+  // Fetch Google Calendar busy times for the entire month (single API call)
+  let calendarBusyByDate = new Map<string, Array<{ start: string; end: string }>>();
+  try {
+    calendarBusyByDate = await getCalendarBusyTimesRange(monthStart, monthEnd);
+  } catch {
+    // Calendar not configured or error — continue without
+  }
 
   // Build lookup maps
   const availMap = new Map<number, { start_time: string; end_time: string; is_working: boolean }>();
@@ -87,8 +96,6 @@ export async function GET(request: NextRequest) {
   }
 
   // Compute per-day availability
-  // Note: Google Calendar busy times are intentionally skipped here for performance.
-  // The per-day endpoint checks Google Calendar when the user selects a specific day.
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const date = new Date(year, monthIndex, d);
     const dateStr = toDateString(date);
@@ -106,16 +113,27 @@ export async function GET(request: NextRequest) {
 
     const allSlots = generateTimeSlots(avail.start_time, avail.end_time, duration, 30);
     const dayBookings = bookingsByDate.get(dateStr) || [];
+    const dayCalendarBusy = calendarBusyByDate.get(dateStr) || [];
 
-    const availableSlots = allSlots.filter((slot) =>
-      !dayBookings.some((b) => slot.start < b.end && slot.end > b.start)
-    );
+    const availableSlots = allSlots.filter((slot) => {
+      const hasBookingConflict = dayBookings.some(
+        (b) => slot.start < b.end && slot.end > b.start
+      );
+      if (hasBookingConflict) return false;
+
+      const hasCalendarConflict = dayCalendarBusy.some(
+        (b) => slot.start < b.end && slot.end > b.start
+      );
+      if (hasCalendarConflict) return false;
+
+      return true;
+    });
 
     const count = availableSlots.length;
-    const status: DayAvailabilityStatus =
-      count === 0 ? 'unavailable' : count <= AVAILABILITY_LIMITED_THRESHOLD ? 'limited' : 'available';
-
-    days[dateStr] = { slotCount: count, status };
+    days[dateStr] = {
+      slotCount: count,
+      status: count > 0 ? 'available' : 'unavailable',
+    };
   }
 
   return NextResponse.json({ days });

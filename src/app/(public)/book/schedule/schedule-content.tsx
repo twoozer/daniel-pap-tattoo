@@ -156,7 +156,6 @@ export function ScheduleContent() {
                     'mt-1 h-1.5 w-1.5 rounded-full',
                     monthLoading ? 'bg-zinc-200 animate-pulse' : '',
                     !monthLoading && status === 'available' ? (isSelected ? 'bg-white' : 'bg-green-500') : '',
-                    !monthLoading && status === 'limited' ? (isSelected ? 'bg-white' : 'bg-amber-500') : '',
                     !monthLoading && status === 'unavailable' ? (isSelected ? 'bg-zinc-400' : 'bg-zinc-200') : '',
                   ].join(' ')} />
                 )}
@@ -169,9 +168,6 @@ export function ScheduleContent() {
         <div className="mt-3 flex items-center justify-center gap-4 text-xs text-zinc-400">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-green-500" /> Available
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-amber-500" /> Limited
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-zinc-200" /> Unavailable

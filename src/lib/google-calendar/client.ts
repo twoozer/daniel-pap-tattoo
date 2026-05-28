@@ -161,6 +161,58 @@ function toAEST_HHmm(isoString: string): string {
 }
 
 /**
+ * Get busy times from Google Calendar for a date range, grouped by date.
+ * Used by the month summary endpoint to check an entire month in one API call.
+ */
+export async function getCalendarBusyTimesRange(
+  startDate: string,
+  endDate: string
+): Promise<Map<string, Array<{ start: string; end: string }>>> {
+  const calendar = getCalendarClient();
+  const result = new Map<string, Array<{ start: string; end: string }>>();
+  if (!calendar) return result;
+
+  const timeZone = 'Australia/Brisbane';
+
+  try {
+    const res = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: `${startDate}T00:00:00+10:00`,
+        timeMax: `${endDate}T23:59:59+10:00`,
+        timeZone,
+        items: [{ id: CALENDAR_ID! }],
+      },
+    });
+
+    const calendarData = res.data.calendars?.[CALENDAR_ID!];
+    const errors = calendarData?.errors;
+    if (errors && errors.length > 0) {
+      console.error('[GCAL] Freebusy range query returned errors:', errors);
+    }
+
+    const busySlots = calendarData?.busy || [];
+    for (const slot of busySlots) {
+      if (!slot.start || !slot.end) continue;
+      // Determine which AEST date this event falls on
+      const d = new Date(slot.start);
+      const aestMs = d.getTime() + 10 * 60 * 60 * 1000;
+      const aestDate = new Date(aestMs);
+      const dateKey = `${aestDate.getUTCFullYear()}-${(aestDate.getUTCMonth() + 1).toString().padStart(2, '0')}-${aestDate.getUTCDate().toString().padStart(2, '0')}`;
+
+      const list = result.get(dateKey) || [];
+      list.push({ start: toAEST_HHmm(slot.start), end: toAEST_HHmm(slot.end) });
+      result.set(dateKey, list);
+    }
+
+    console.log(`[GCAL] Busy range ${startDate} to ${endDate}: ${busySlots.length} events`);
+    return result;
+  } catch (err) {
+    console.error('[GCAL] Failed to get busy times range:', err);
+    return result;
+  }
+}
+
+/**
  * Get busy times from Google Calendar for a given date.
  * Blocks slots where the artist has manually added events or personal appointments.
  */

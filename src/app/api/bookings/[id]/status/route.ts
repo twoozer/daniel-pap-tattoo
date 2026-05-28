@@ -53,7 +53,9 @@ export async function PATCH(
 
     // If cancelling and there's a calendar event, delete it
     if ((status === 'cancelled' || status === 'no_show') && booking.google_calendar_event_id) {
-      deleteCalendarEvent(booking.google_calendar_event_id).catch(() => {});
+      deleteCalendarEvent(booking.google_calendar_event_id).catch((err) => {
+        console.error('[GCAL] Failed to delete event on status change:', err);
+      });
     }
 
     return NextResponse.json({ success: true });

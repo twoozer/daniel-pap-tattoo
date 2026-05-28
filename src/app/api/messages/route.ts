@@ -115,7 +115,9 @@ export async function POST(request: NextRequest) {
             bookingId: booking_id,
             accessToken: booking.access_token,
             isAdmin: false,
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error('[EMAIL] Failed to notify customer:', err);
+          });
         } else {
           // Customer sent a message → notify the admin
           const adminEmail = process.env.ADMIN_EMAIL || 'info@danielpaptattoo.com';
@@ -126,11 +128,13 @@ export async function POST(request: NextRequest) {
             messagePreview: preview,
             bookingId: booking_id,
             isAdmin: true,
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error('[EMAIL] Failed to notify admin:', err);
+          });
         }
       }
-    } catch {
-      // Email notification failure should not break messaging
+    } catch (err) {
+      console.error('[EMAIL] Message notification error:', err);
     }
 
     return NextResponse.json({ message });
